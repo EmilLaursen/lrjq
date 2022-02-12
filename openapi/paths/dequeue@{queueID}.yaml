@@ -1,0 +1,15 @@
+get:
+  operationId: dequeue
+  parameters:
+    - $ref: ../components/parameters/queueID.yaml
+  responses:
+    '200':
+      description: lol
+      content:
+        application/json:
+          schema:
+            type: object
+    4XX:
+      $ref: ../components/responses/Error.yaml
+    5XX:
+      $ref: ../components/responses/Error.yaml

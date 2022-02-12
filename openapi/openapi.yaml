@@ -1,0 +1,18 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: Long running job queue
+  description: >-
+    Long running job queue backed by postgres
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+paths:
+  /queue/enqueue/{queueID}:
+    $ref: paths/enqueue@{queueID}.yaml
+  /queue/dequeue/{queueID}:
+    $ref: paths/dequeue@{queueID}.yaml
+  /queue/heartbeat/{messageID}/{workID}:
+    $ref: paths/heartbeat@{messageID}@{workID}.yaml
+  /queue/ack/{messageID}/{workID}:
+    $ref: paths/ack@{messageID}@{workID}.yaml

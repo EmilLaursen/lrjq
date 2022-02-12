@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13-alpine
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "password"
+      PGDATA: "/data/postgres"
+    # volumes:
+    #   - ./db-data/:/var/lib/postgresql/data/
+
+  queue:
+    build:
+      context: .
+    ports:
+      - 8796:8796
+    environment:
+      POSTGRES_CONN_STR: postgres://postgres:password@postgres:5432/postgres
+      PORT: 8796
+      LOG_LEVEL: DEBUG

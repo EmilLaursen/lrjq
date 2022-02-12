@@ -38,5 +38,7 @@ CREATE TABLE IF NOT EXISTS DEAD_LETTERS(
                    started_at timestamptz,
                    done_at timestamptz,
                    tries integer NOT NULL DEFAULT 0,
-                   priority integer NOT NULL DEFAULT 0);
+                   priority integer NOT NULL DEFAULT 0,
+                   dead_lettered_at timestamptz NOT NULL DEFAULT now()
+);
 COMMIT;

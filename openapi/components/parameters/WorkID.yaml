@@ -1,0 +1,5 @@
+name: workID
+in: path
+required: true
+schema:
+  $ref: ../schemas/UUIDv4.yaml

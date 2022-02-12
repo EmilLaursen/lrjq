@@ -1,0 +1,12 @@
+post:
+  operationId: heartbeat
+  parameters:
+    - $ref: ../components/parameters/WorkID.yaml
+    - $ref: ../components/parameters/MessageID.yaml
+  responses:
+    '200':
+      description: heartbeat ok
+    4XX:
+      $ref: ../components/responses/Error.yaml
+    5XX:
+      $ref: ../components/responses/Error.yaml

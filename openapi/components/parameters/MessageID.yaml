@@ -1,0 +1,5 @@
+name: messageID
+in: path
+required: true
+schema:
+  $ref: ../schemas/MessageID.yaml
