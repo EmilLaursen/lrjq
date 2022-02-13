@@ -206,7 +206,7 @@ const enqueueSQL = `INSERT INTO queue.jobs (payload, priority, queue_id) VALUES
 RETURNING *;`
 
 type EnqueueParams struct {
-	Payload  pgtype.JSONB
+	Payload  []byte
 	Priority int32
 	QueueID  string
 }
@@ -214,7 +214,7 @@ type EnqueueParams struct {
 type EnqueueRow struct {
 	ID            int32              `json:"id"`
 	QueueID       string             `json:"queue_id"`
-	Payload       pgtype.JSONB       `json:"payload"`
+	Payload       []byte             `json:"payload"`
 	WorkSignature pgtype.UUID        `json:"work_signature"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	LastHeartbeat pgtype.Timestamptz `json:"last_heartbeat"`
@@ -276,7 +276,7 @@ RETURNING *;`
 type DequeueRow struct {
 	ID            int32              `json:"id"`
 	QueueID       string             `json:"queue_id"`
-	Payload       pgtype.JSONB       `json:"payload"`
+	Payload       []byte             `json:"payload"`
 	WorkSignature pgtype.UUID        `json:"work_signature"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	LastHeartbeat pgtype.Timestamptz `json:"last_heartbeat"`

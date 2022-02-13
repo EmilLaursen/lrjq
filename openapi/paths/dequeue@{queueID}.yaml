@@ -5,10 +5,40 @@ get:
   responses:
     '200':
       description: lol
-      content:
-        application/json:
+      headers:
+        X-LRJQ-ID:
           schema:
-            type: object
+            $ref: ../schemas/MessageID.yaml
+        X-LRJQ-QUEUE-ID:
+          schema:
+            $ref: ../schemas/QueueID.yaml
+        X-LRJQ-WORK-SIGNATURE:
+          schema:
+            $ref: ../schemas/UUIDv4.yaml
+        X-LRJQ-CREATED-AT:
+          schema:
+            type: string
+            format: date-time
+        X-LRJQ-STARTED-AT:
+          schema:
+            type: string
+            format: date-time
+        X-LRJQ-TRIES:
+          schema:
+            type: integer
+            format: int32
+        X-LRJQ-PRIORITY:
+          schema:
+            type: integer
+            format: int32
+        X-LRJQ-STATUS:
+          schema:
+            $ref: ../schemas/JobStatus.yaml
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

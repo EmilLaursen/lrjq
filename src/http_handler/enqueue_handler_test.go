@@ -31,10 +31,7 @@ func toEnqRow(e enq) gen.EnqueueRow {
 	return gen.EnqueueRow{
 		ID:      e.ID,
 		QueueID: e.QueueID,
-		Payload: pgtype.JSONB{
-			Bytes:  e.Payload,
-			Status: pgtype.Present,
-		},
+		Payload: e.Payload,
 		WorkSignature: pgtype.UUID{
 			Bytes:  e.WorkSignature,
 			Status: pgtype.Present,

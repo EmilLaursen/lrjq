@@ -11,7 +11,6 @@ import (
 
 	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store/gen"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgtype"
 	"github.com/rs/zerolog"
 )
 
@@ -56,10 +55,7 @@ func parseParams(r *http.Request) gen.EnqueueParams {
 	}
 
 	return gen.EnqueueParams{
-		Payload: pgtype.JSONB{
-			Bytes:  pl,
-			Status: pgtype.Present,
-		},
+		Payload:  pl,
 		Priority: priority,
 		QueueID:  chi.URLParam(r, "queueID"),
 	}

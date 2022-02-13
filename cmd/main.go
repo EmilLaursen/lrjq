@@ -132,9 +132,10 @@ func connectPostgres(ctx context.Context, connstr string) (*pgxpool.Pool, error)
 	var pool *pgxpool.Pool
 	for k := 0; k < 10; k++ {
 		pool, err = pgxpool.ConnectConfig(ctx, cfg)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			return pool, nil
 		}
+		time.Sleep(time.Duration(k) * time.Second)
 	}
-	return pool, nil
+	return pool, err
 }

@@ -1,4 +1,4 @@
-FROM golang:1.17 as builder
+FROM golang:1.17-bullseye as builder
 
 ENV GO111MODULE=on
 
@@ -20,11 +20,10 @@ COPY --from=builder /app/queue_server /
 
 CMD ["/queue_server"]
 
-FROM golang:1.17 as development
+FROM golang:1.17-bullseye as development
 
 WORKDIR /app
 RUN go install github.com/cespare/reflex@latest
-COPY --from=builder /app/queue_server /
-CMD /go/bin/reflex -vsr '.*\.yaml|.*\.go' /queue_server
+ENTRYPOINT ["/go/bin/reflex", "-vsr", ".*\.yaml|.*\.go", "--", "sh", "-c", "go run /cmd/main.go"]
 
 # CMD ["/queue_server"]

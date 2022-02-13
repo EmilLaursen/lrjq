@@ -9,7 +9,7 @@ CREATE type job_status AS ENUM('ready', 'started', 'done');
 CREATE TABLE IF NOT EXISTS queue.jobs(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
-                   payload jsonb NOT NULL,
+                   payload bytea NOT NULL,
                    work_signature uuid,
                    created_at timestamptz NOT NULL DEFAULT NOW(),
                    last_heartbeat timestamptz,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS queue.jobs(
 CREATE TABLE IF NOT EXISTS queue.done_jobs(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
-                   payload jsonb NOT NULL,
+                   payload bytea NOT NULL,
                    created_at timestamptz NOT NULL,
                    last_heartbeat timestamptz,
                    started_at timestamptz,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS queue.done_jobs(
 CREATE TABLE IF NOT EXISTS queue.dead_letters(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
-                   payload jsonb NOT NULL,
+                   payload bytea NOT NULL,
                    created_at timestamptz NOT NULL,
                    last_heartbeat timestamptz,
                    started_at timestamptz,

@@ -28,6 +28,8 @@ services:
       - 8796:8796
     volumes:
       - ./:/app/
+    depends_on:
+      - postgres
     environment:
       TEST_POSTGRES_CONN: postgres://lrjq:lrjq@postgres:5432/testdb
       POSTGRES_CONN_STR: postgres://lrjq:lrjq@postgres:5432/queue
