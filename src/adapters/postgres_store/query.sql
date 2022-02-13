@@ -1,12 +1,12 @@
 -- name: Enqueue :one
-INSERT INTO jobs (payload, priority, queue_id) VALUES
+INSERT INTO queue.jobs (payload, priority, queue_id) VALUES
 (pggen.arg('payload'), pggen.arg('priority'), pggen.arg('queueID'))
 RETURNING *;
 
 -- name: Dequeue :one
 WITH PEEK AS (
      SELECT id as peek_id
-     FROM jobs
+     FROM queue.jobs
      WHERE
         status = 'ready' and
         queue_id = pggen.arg('queueID')
@@ -14,28 +14,28 @@ WITH PEEK AS (
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
-UPDATE jobs
+UPDATE queue.jobs
 SET
   started_at = now(),
   last_heartbeat = now(),
   status = 'started',
-  tries = jobs.tries + 1,
+  tries = queue.jobs.tries + 1,
   work_signature = uuid_generate_v4()
 FROM PEEK
 WHERE
-  jobs.id = peek_id
+  queue.jobs.id = peek_id
 RETURNING *;
 
 -- name: ReportDone :exec
 WITH moved_row AS (
-     DELETE FROM jobs
+     DELETE FROM queue.jobs
      WHERE
         id = pggen.arg('id') AND
         work_signature = pggen.arg('workSignature') AND
         status = 'started'
      RETURNING *
 )
-INSERT INTO DONE_JOBS (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
+INSERT INTO queue.done_jobs (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
 SELECT
    id,
    queue_id,
@@ -48,7 +48,7 @@ SELECT
 FROM moved_row;
 
 -- name: RequeueFailed :exec
-UPDATE jobs
+UPDATE queue.jobs
 SET
   status = 'ready',
   started_at = null,
@@ -59,12 +59,12 @@ WHERE
 
 
 -- name: DeleteDeadLetters :exec
-WITH DEAD_JOBS AS (
-     DELETE FROM jobs
+WITH dead_jobs AS (
+     DELETE FROM queue.jobs
      WHERE tries >= pggen.arg('maxTries')
      RETURNING *
 )
-INSERT INTO dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
+INSERT INTO queue.dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
 SELECT
   id,
   queue_id,
@@ -77,7 +77,7 @@ SELECT
 FROM DEAD_JOBS;
 
 -- name: SendHeartBeat :exec
-UPDATE jobs SET
+UPDATE queue.jobs SET
   last_heartbeat = now()
 WHERE
   id = pggen.arg('id') and work_signature = pggen.arg('workSignature') and status = 'started';

@@ -4,15 +4,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store"
 	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store/gen"
+	"github.com/EmilLaursen/lrjq/src/core"
 	"github.com/jackc/pgtype"
 	"github.com/rs/zerolog"
 )
 
 func RequeueFailed(
 	ctx context.Context,
-	db postgres_store.GenericPGX,
+	db core.GenericPGX,
 	heartbeatDeadline time.Duration,
 	requeueInterval time.Duration,
 	heartbeatInterval time.Duration,
@@ -56,7 +56,7 @@ func RequeueFailed(
 
 func MoveDeadletters(
 	ctx context.Context,
-	db postgres_store.GenericPGX,
+	db core.GenericPGX,
 	maxTries int32,
 	moveDeadletterInterval time.Duration,
 	heartbeatInterval time.Duration,

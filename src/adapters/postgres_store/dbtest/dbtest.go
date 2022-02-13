@@ -6,13 +6,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store"
+	"github.com/EmilLaursen/lrjq/src/core"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 var pool *pgxpool.Pool
 
-func GetTestDbTx(t *testing.T) (postgres_store.GenericPGX, context.Context) {
+func GetTestDbTx(t *testing.T) (core.GenericPGX, context.Context) {
 	ctx := context.Background()
 	tx, err := pool.Begin(ctx)
 	if err != nil {

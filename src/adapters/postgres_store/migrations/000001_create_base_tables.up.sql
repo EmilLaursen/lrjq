@@ -2,9 +2,11 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+CREATE SCHEMA if not exists queue;
+
 CREATE type job_status AS ENUM('ready', 'started', 'done');
 
-CREATE TABLE IF NOT EXISTS JOBS(
+CREATE TABLE IF NOT EXISTS queue.jobs(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
                    payload jsonb NOT NULL,
@@ -17,7 +19,7 @@ CREATE TABLE IF NOT EXISTS JOBS(
                    priority integer NOT NULL DEFAULT 0,
                    status job_status DEFAULT 'ready' );
 
-CREATE TABLE IF NOT EXISTS DONE_JOBS(
+CREATE TABLE IF NOT EXISTS queue.done_jobs(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
                    payload jsonb NOT NULL,
@@ -29,7 +31,7 @@ CREATE TABLE IF NOT EXISTS DONE_JOBS(
                    priority integer NOT NULL DEFAULT 0);
 
 
-CREATE TABLE IF NOT EXISTS DEAD_LETTERS(
+CREATE TABLE IF NOT EXISTS queue.dead_letters(
                    id serial PRIMARY KEY,
                    queue_id text NOT NULL,
                    payload jsonb NOT NULL,

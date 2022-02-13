@@ -14,11 +14,11 @@ import (
 )
 
 func QueueRouter(r *chi.Mux, logger *zerolog.Logger, pool *pgxpool.Pool) *chi.Mux {
-	r.Use(NewHandlerLoggingChain(logger))
-	r.Post("/queue/enqueue/{queueID}", enqueueHandler(gen.NewQuerier(pool).Enqueue))
-	r.Get("/queue/dequeue/{queueID}", dequeueHandler(gen.NewQuerier(pool).Dequeue))
-	r.Post("/queue/heartbeat/{ID}/{workID}", heartbeatHandler(gen.NewQuerier(pool).SendHeartBeat))
-	r.Put("/queue/ack/{ID}/{workID}", reportDoneHandler(gen.NewQuerier(pool).ReportDone))
+	m := NewHandlerLoggingChain(logger)
+	r.Post("/queue/enqueue/{queueID}", m(enqueueHandler(gen.NewQuerier(pool).Enqueue)).ServeHTTP)
+	r.Get("/queue/dequeue/{queueID}", m(dequeueHandler(gen.NewQuerier(pool).Dequeue)).ServeHTTP)
+	r.Post("/queue/heartbeat/{ID}/{workID}", m(heartbeatHandler(gen.NewQuerier(pool).SendHeartBeat)).ServeHTTP)
+	r.Put("/queue/ack/{ID}/{workID}", m(reportDoneHandler(gen.NewQuerier(pool).ReportDone)).ServeHTTP)
 	r.Mount("/", openapi.OpenAPIHandler())
 	return r
 }

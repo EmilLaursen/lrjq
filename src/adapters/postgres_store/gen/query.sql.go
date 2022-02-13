@@ -201,7 +201,7 @@ func (tr *typeResolver) setValue(vt pgtype.ValueTranscoder, val interface{}) pgt
 	return vt
 }
 
-const enqueueSQL = `INSERT INTO jobs (payload, priority, queue_id) VALUES
+const enqueueSQL = `INSERT INTO queue.jobs (payload, priority, queue_id) VALUES
 ($1, $2, $3)
 RETURNING *;`
 
@@ -253,7 +253,7 @@ func (q *DBQuerier) EnqueueScan(results pgx.BatchResults) (EnqueueRow, error) {
 
 const dequeueSQL = `WITH PEEK AS (
      SELECT id as peek_id
-     FROM jobs
+     FROM queue.jobs
      WHERE
         status = 'ready' and
         queue_id = $1
@@ -261,16 +261,16 @@ const dequeueSQL = `WITH PEEK AS (
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
-UPDATE jobs
+UPDATE queue.jobs
 SET
   started_at = now(),
   last_heartbeat = now(),
   status = 'started',
-  tries = jobs.tries + 1,
+  tries = queue.jobs.tries + 1,
   work_signature = uuid_generate_v4()
 FROM PEEK
 WHERE
-  jobs.id = peek_id
+  queue.jobs.id = peek_id
 RETURNING *;`
 
 type DequeueRow struct {
@@ -315,14 +315,14 @@ func (q *DBQuerier) DequeueScan(results pgx.BatchResults) (DequeueRow, error) {
 }
 
 const reportDoneSQL = `WITH moved_row AS (
-     DELETE FROM jobs
+     DELETE FROM queue.jobs
      WHERE
         id = $1 AND
         work_signature = $2 AND
         status = 'started'
      RETURNING *
 )
-INSERT INTO DONE_JOBS (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
+INSERT INTO queue.done_jobs (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
 SELECT
    id,
    queue_id,
@@ -358,7 +358,7 @@ func (q *DBQuerier) ReportDoneScan(results pgx.BatchResults) (pgconn.CommandTag,
 	return cmdTag, err
 }
 
-const requeueFailedSQL = `UPDATE jobs
+const requeueFailedSQL = `UPDATE queue.jobs
 SET
   status = 'ready',
   started_at = null,
@@ -391,12 +391,12 @@ func (q *DBQuerier) RequeueFailedScan(results pgx.BatchResults) (pgconn.CommandT
 	return cmdTag, err
 }
 
-const deleteDeadLettersSQL = `WITH DEAD_JOBS AS (
-     DELETE FROM jobs
+const deleteDeadLettersSQL = `WITH dead_jobs AS (
+     DELETE FROM queue.jobs
      WHERE tries >= $1
      RETURNING *
 )
-INSERT INTO dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
+INSERT INTO queue.dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
 SELECT
   id,
   queue_id,
@@ -432,7 +432,7 @@ func (q *DBQuerier) DeleteDeadLettersScan(results pgx.BatchResults) (pgconn.Comm
 	return cmdTag, err
 }
 
-const sendHeartBeatSQL = `UPDATE jobs SET
+const sendHeartBeatSQL = `UPDATE queue.jobs SET
   last_heartbeat = now()
 WHERE
   id = $1 and work_signature = $2 and status = 'started';`

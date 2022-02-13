@@ -26,9 +26,9 @@ type Config struct {
 	Port            string `envconfig:"PORT" default:"8796"`
 	LogLevel        string `envconfig:"LOG_LEVEL" default:"INFO"`
 
-	HeartbeatDeadline       time.Duration `envconfig:"HEARTBEAT_DEADLINE" default:"5m"`
+	HeartbeatDeadline       time.Duration `envconfig:"HEARTBEAT_DEADLINE" default:"20m"`
 	MsgMaxTries             int32         `envconfig:"MAX_TRIES" default:"3"`
-	DeadletterSweepInterval time.Duration `envconfig:"DEADLETTER_SWEEP_INTERVAL" default:"2m"`
+	DeadletterSweepInterval time.Duration `envconfig:"DEADLETTER_SWEEP_INTERVAL" default:"10m"`
 }
 
 func main() {

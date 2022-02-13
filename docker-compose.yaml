@@ -12,18 +12,24 @@ services:
       retries: 10
     restart: unless-stopped
     environment:
-      POSTGRES_USER: "postgres"
-      POSTGRES_PASSWORD: "password"
+      POSTGRES_USER: "lrjq"
+      POSTGRES_PASSWORD: "lrjq"
+      POSTGRES_DB: "queue"
       PGDATA: "/data/postgres"
-    # volumes:
-    #   - ./db-data/:/var/lib/postgresql/data/
+    volumes:
+    #   - ./db-data/:/var/lib/postgresql/data
+        - ./.postgres_init.sql:/docker-entrypoint-initdb.d/postgres_init.sql
 
   queue:
     build:
       context: .
+      target: development
     ports:
       - 8796:8796
+    volumes:
+      - ./:/app/
     environment:
-      POSTGRES_CONN_STR: postgres://postgres:password@postgres:5432/postgres
+      TEST_POSTGRES_CONN: postgres://lrjq:lrjq@postgres:5432/testdb
+      POSTGRES_CONN_STR: postgres://lrjq:lrjq@postgres:5432/queue
       PORT: 8796
       LOG_LEVEL: DEBUG
