@@ -23,6 +23,8 @@
   - nack after ack (or vice versa) fails
   - concurrency test
 - [x] add DIRENV with path_add to binary folder
+- [ ] fix bug in dequeue - need maxtries guard
+- [ ] tls certificates from env
 - [ ] refactor json response stuff?
 - [ ] BULK OPS
 - [ ] NACK+ACK

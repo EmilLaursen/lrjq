@@ -9,7 +9,8 @@ WITH PEEK AS (
      FROM queue.jobs
      WHERE
         status = 'ready' and
-        queue_id = pggen.arg('queueID')
+        queue_id = pggen.arg('queueID') and
+        tries <= pggen.arg('maxTries')
     ORDER BY priority, created_at
     FOR UPDATE SKIP LOCKED
     LIMIT 1
@@ -61,7 +62,7 @@ WHERE
 -- name: DeleteDeadLetters :exec
 WITH dead_jobs AS (
      DELETE FROM queue.jobs
-     WHERE tries >= pggen.arg('maxTries')
+     WHERE tries > pggen.arg('maxTries') and status = 'ready'
      RETURNING *
 )
 INSERT INTO queue.dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
