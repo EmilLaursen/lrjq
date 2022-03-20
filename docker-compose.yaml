@@ -34,4 +34,4 @@ services:
       TEST_POSTGRES_CONN: postgres://lrjq:lrjq@postgres:5432/testdb
       POSTGRES_CONN_STR: postgres://lrjq:lrjq@postgres:5432/queue
       PORT: 8796
-      LOG_LEVEL: DEBUG
+      LOG_LEVEL: INFO

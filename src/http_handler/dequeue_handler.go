@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -64,7 +63,6 @@ func dequeueHandler(dequeue dequeueFunc) http.HandlerFunc {
 
 			switch {
 			case errors.Is(err, pgx.ErrNoRows):
-				logger.Err(err).Send()
 				rw.WriteHeader(http.StatusNotFound)
 
 			default:
@@ -94,7 +92,7 @@ func dequeueHandler(dequeue dequeueFunc) http.HandlerFunc {
 		}
 		rw.Header().Add("content-type", "application/octet-stream")
 		rw.Header().Add("content-length", fmt.Sprintf("%v", len(msg.Payload)))
-		if _, err := io.Copy(rw, bytes.NewReader(msg.Payload)); err != nil {
+		if _, err := rw.Write(msg.Payload); err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}

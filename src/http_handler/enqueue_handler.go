@@ -10,26 +10,29 @@ import (
 	"strings"
 
 	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store/gen"
+	"github.com/dolmen-go/contextio"
 	"github.com/go-chi/chi/v5"
+	"github.com/rotisserie/eris"
 	"github.com/rs/zerolog"
+	"github.com/tidwall/sjson"
 )
 
-func parseParams(r *http.Request) gen.EnqueueParams {
+func parseParams(r *http.Request) (gen.EnqueueParams, error) {
 	logger := zerolog.Ctx(r.Context())
 
 	if r == nil {
-		return gen.EnqueueParams{}
+		return gen.EnqueueParams{}, nil
 	}
 
+	var aerr error
 	var priority int32
 	priorityRaw := r.URL.Query().Get("priority")
 	if priorityRaw != "" {
-		i, err := strconv.ParseInt(priorityRaw, 10, 32)
-		if err != nil {
-			logger.Err(err).Send()
-		} else {
-			priority = int32(i)
+		i, perr := strconv.ParseInt(priorityRaw, 10, 32)
+		if perr != nil {
+			aerr = perr
 		}
+		priority = int32(i)
 	}
 
 	// TODO: handle headers - not yet in model
@@ -43,22 +46,39 @@ func parseParams(r *http.Request) gen.EnqueueParams {
 	}
 
 	var hds bytes.Buffer
-	err := json.NewEncoder(&hds).Encode(&headers)
-	if err != nil {
-		logger.Err(err).Send()
+	if err := json.NewEncoder(&hds).Encode(&headers); err != nil {
+		if aerr == nil {
+			aerr = err
+		} else {
+			aerr = eris.Wrap(aerr, err.Error())
+		}
 	}
 
-	pl, err := io.ReadAll(r.Body)
+	bdy, err := io.ReadAll(contextio.NewReader(r.Context(), r.Body))
 	if err != nil {
-		logger.Err(err).Send()
-
+		if aerr == nil {
+			aerr = err
+		} else {
+			aerr = eris.Wrap(aerr, err.Error())
+		}
+		logger.Err(err).Bytes("payload", bdy).Send()
 	}
 
 	return gen.EnqueueParams{
-		Payload:  pl,
+		Payload:  bdy,
 		Priority: priority,
 		QueueID:  chi.URLParam(r, "queueID"),
+	}, aerr
+}
+
+func transformOutput(er gen.EnqueueRow) ([]byte, error) {
+	er.Payload = nil
+	var raw bytes.Buffer
+	err := json.NewEncoder(&raw).Encode(&er)
+	if err != nil {
+		return nil, err
 	}
+	return sjson.DeleteBytes(raw.Bytes(), "payload")
 }
 
 type enqueueFunc func(ctx context.Context, msg gen.EnqueueParams) (gen.EnqueueRow, error)
@@ -68,7 +88,17 @@ func enqueueHandler(enqueue enqueueFunc) http.HandlerFunc {
 		ctx := r.Context()
 		logger := zerolog.Ctx(ctx)
 
-		params := parseParams(r)
+		params, err := parseParams(r)
+		if err != nil {
+			rw.WriteHeader(http.StatusBadRequest)
+			err := json.NewEncoder(rw).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			if err != nil {
+				logger.Err(err).Send()
+			}
+			return
+		}
 
 		l := logger.With().
 			Str("queue_id", params.QueueID).
@@ -81,12 +111,21 @@ func enqueueHandler(enqueue enqueueFunc) http.HandlerFunc {
 		if err != nil {
 			logger.Err(err).Send()
 			rw.WriteHeader(http.StatusInternalServerError)
+			err := json.NewEncoder(rw).Encode(map[string]interface{}{
+				"error": "internal error",
+			})
+			if err != nil {
+				logger.Err(err).Send()
+			}
 			return
 		}
 		rw.Header().Add("content-type", "application/json")
-		if err := json.NewEncoder(rw).Encode(&msg); err != nil {
+		rw.WriteHeader(http.StatusCreated)
+		out, err := transformOutput(msg)
+		if err != nil {
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		rw.Write(out)
 	}
 }

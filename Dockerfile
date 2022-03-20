@@ -1,4 +1,4 @@
-FROM golang:1.17-bullseye as builder
+FROM golang:1.17-alpine as builder
 
 ENV GO111MODULE=on
 
@@ -6,24 +6,26 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 
+RUN go install github.com/cespare/reflex@latest
 RUN go mod download
 
 COPY openapi/ openapi/
 COPY cmd/ cmd/
 COPY src/ src/
 
-RUN go build -o queue_server cmd/main.go
+ENV CGO_ENABLED 0
+RUN GOOS=linux GOARCH=amd64 go build \
+      -ldflags='-w -s -extldflags "-static"' -a \
+      -o /app/queue_server cmd/main.go
 
-FROM gcr.io/distroless/base as production
-
+FROM gcr.io/distroless/static as production
 COPY --from=builder /app/queue_server /
+ENTRYPOINT ["/queue_server"]
 
-CMD ["/queue_server"]
+FROM golang:1.17-alpine as development
 
-FROM golang:1.17-bullseye as development
-
+ENV CGO_ENABLED 0
+COPY --from=builder /app/queue_server /
 WORKDIR /app
-RUN go install github.com/cespare/reflex@latest
-ENTRYPOINT ["/go/bin/reflex", "-vsr", ".*\.yaml|.*\.go", "--", "sh", "-c", "go run /cmd/main.go"]
-
-# CMD ["/queue_server"]
+COPY --from=builder /go/bin/reflex /usr/bin/reflex
+ENTRYPOINT ["reflex", "-sr", ".*(\\.yaml|\\.go)$$", "--", "go", "run", "cmd/main.go"]

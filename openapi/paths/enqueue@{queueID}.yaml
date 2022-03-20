@@ -4,14 +4,26 @@ post:
     - $ref: ../components/parameters/Priority.yaml
     - $ref: ../components/parameters/queueID.yaml
   requestBody:
+    required: true
     content:
-      application/json:
+      application/octet-stream:
         schema:
-          type: object
+          type: string
+          format: binary
+          minLength: 1
   responses:
     '201':
       description: |
         lol
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas/MessageMetadata.yaml
+      links:
+        EnqueueDequeue:
+          operationId: dequeueMsg
+          parameters:
+            queueID: '$request.path.queueID'
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

@@ -2,6 +2,7 @@ package http_handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -32,30 +33,25 @@ func reportDoneHandler(reportDone reportDoneFunc) http.HandlerFunc {
 
 		id, workSignature, err := parseHeartbeatParams(msgID, workID)
 		if err != nil {
-			logger.Err(err).Send()
 			rw.WriteHeader(http.StatusBadRequest)
+			err := json.NewEncoder(rw).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			if err != nil {
+				logger.Err(err).Send()
+			}
 			return
 		}
 
 		cmd, err := reportDone(ctx, id, workSignature)
 		if err != nil {
-
+			logger.Err(err).Send()
 			switch {
-			case errors.Is(err, pgx.ErrNoRows):
-				logger.Err(err).Send()
+			case errors.Is(err, pgx.ErrNoRows) || cmd.RowsAffected() == 0:
 				rw.WriteHeader(http.StatusNotFound)
-
 			default:
-				logger.Err(err).Send()
 				rw.WriteHeader(http.StatusInternalServerError)
 			}
-
-			return
-		}
-
-		if cmd.RowsAffected() == 0 {
-			logger.Err(err).Send()
-			rw.WriteHeader(http.StatusNotFound)
 			return
 		}
 

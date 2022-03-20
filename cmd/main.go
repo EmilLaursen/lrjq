@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/EmilLaursen/lrjq/openapi"
 	queue "github.com/EmilLaursen/lrjq/src"
 	"github.com/EmilLaursen/lrjq/src/http_handler"
 	"github.com/go-chi/chi/v5"
@@ -93,7 +94,10 @@ func main() {
 		pool.Close()
 	}(ctx)
 
-	base := http_handler.QueueRouter(chi.NewRouter(), &logger, pool)
+	base := chi.NewRouter()
+	base.Mount("/static", http.StripPrefix("/static", openapi.OpenAPIHandler()))
+	r := chi.NewRouter()
+	base.Mount("/", http_handler.QueueRouter(r, &logger, pool))
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("0.0.0.0:%s", cfg.Port),
@@ -105,7 +109,7 @@ func main() {
 		defer wg.Done()
 		<-ctx.Done()
 
-		ctx, cl := context.WithTimeout(ctx, time.Second*30)
+		ctx, cl := context.WithTimeout(context.Background(), time.Second*30)
 		defer cl()
 		if err := srv.Shutdown(ctx); err != nil {
 			logger.Err(err).Send()

@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/deepmap/oapi-codegen v1.9.1
+	github.com/dolmen-go/contextio v0.0.0-20210803191544-7a4579021851
 	github.com/getkin/kin-openapi v0.89.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/gofrs/uuid v4.2.0+incompatible
@@ -16,6 +17,7 @@ require (
 	github.com/rs/zerolog v1.26.1
 	github.com/stretchr/testify v1.7.0
 	github.com/tidwall/gjson v1.14.0
+	github.com/tidwall/sjson v1.2.4
 )
 
 require (

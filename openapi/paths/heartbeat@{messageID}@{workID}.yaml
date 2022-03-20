@@ -1,5 +1,5 @@
 post:
-  operationId: heartbeat
+  operationId: heartBeat
   parameters:
     - $ref: ../components/parameters/WorkID.yaml
     - $ref: ../components/parameters/MessageID.yaml

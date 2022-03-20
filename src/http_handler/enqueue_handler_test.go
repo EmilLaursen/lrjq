@@ -78,7 +78,7 @@ func TestEnqueueSerialize(t *testing.T) {
 			DoneAt:        n,
 			Tries:         5,
 			Priority:      10,
-		}, http.StatusOK},
+		}, http.StatusCreated},
 	}
 
 	for _, tc := range tests {

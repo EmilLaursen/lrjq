@@ -1,6 +1,9 @@
 package http_handler
 
 import (
+	"context"
+	"io"
+	"log"
 	"net/http"
 	"time"
 
@@ -13,13 +16,36 @@ import (
 	"github.com/rs/zerolog/hlog"
 )
 
+func DrainAndClose(r *http.Request) {
+	if r == nil {
+		return
+	}
+	defer r.Body.Close()
+	n, err := io.Copy(io.Discard, r.Body)
+	if err != nil {
+		zerolog.Ctx(r.Context()).Debug().Int64("discarded", n).Err(err).Msg("drain error")
+	}
+}
+
 func QueueRouter(r *chi.Mux, logger *zerolog.Logger, pool *pgxpool.Pool) *chi.Mux {
 	m := NewHandlerLoggingChain(logger)
-	r.Post("/queue/enqueue/{queueID}", m(enqueueHandler(gen.NewQuerier(pool).Enqueue)).ServeHTTP)
-	r.Get("/queue/dequeue/{queueID}", m(dequeueHandler(gen.NewQuerier(pool).Dequeue)).ServeHTTP)
-	r.Post("/queue/heartbeat/{ID}/{workID}", m(heartbeatHandler(gen.NewQuerier(pool).SendHeartBeat)).ServeHTTP)
-	r.Put("/queue/ack/{ID}/{workID}", m(reportDoneHandler(gen.NewQuerier(pool).ReportDone)).ServeHTTP)
-	r.Mount("/", openapi.OpenAPIHandler())
+	r.Use(m)
+	ctx := context.Background()
+	doc, err := openapi.FromFS(logger.WithContext(ctx), openapi.OpenAPIFS, "openapi.yaml")
+	if err != nil {
+		log.Panic(err)
+	}
+	oaval, err := openapi.GetOpenAPIMiddleware(doc)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	r.Use(oaval)
+	r.Post("/queue/enqueue/{queueID}", enqueueHandler(gen.NewQuerier(pool).Enqueue).ServeHTTP)
+	r.Get("/queue/dequeue/{queueID}", dequeueHandler(gen.NewQuerier(pool).Dequeue).ServeHTTP)
+	r.Post("/queue/heartbeat/{ID}/{workID}", heartbeatHandler(gen.NewQuerier(pool).SendHeartBeat).ServeHTTP)
+	r.Put("/queue/ack/{ID}/{workID}", reportDoneHandler(gen.NewQuerier(pool).ReportDone).ServeHTTP)
+
 	return r
 }
 

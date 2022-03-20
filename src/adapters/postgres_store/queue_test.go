@@ -29,19 +29,16 @@ type Message struct {
 
 func MessageToParams(msg EnqueueMessage) gen.EnqueueParams {
 	return gen.EnqueueParams{
-		Payload: pgtype.JSONB{
-			Bytes:  msg.Payload,
-			Status: pgtype.Present,
-		},
+		Payload:  msg.Payload,
 		Priority: msg.Priority,
 		QueueID:  msg.QueueID,
 	}
 }
 
 func TestEnqueueDequeue(t *testing.T) {
-	tx, ctx := dbtest.GetTestDbTx(t)
 
 	t.Run("gives_back_payload", func(t *testing.T) {
+		tx, ctx := dbtest.GetTestDbTx(t)
 		queueID := "qid"
 		payload := []byte(`{"msg":"hello"}`)
 		row, err := gen.NewQuerier(tx).Enqueue(ctx, MessageToParams(EnqueueMessage{
@@ -52,13 +49,16 @@ func TestEnqueueDequeue(t *testing.T) {
 
 		rrow, err := gen.NewQuerier(tx).Dequeue(ctx, queueID)
 		require.Nil(t, err)
-		assert.JSONEq(t, string(row.Payload.Bytes), string(rrow.Payload.Bytes))
+		assert.JSONEq(t, string(row.Payload), string(rrow.Payload))
 	})
 
 	t.Run("sets_workid", func(t *testing.T) {
+		tx, ctx := dbtest.GetTestDbTx(t)
+		querier := gen.NewQuerier(tx)
+
 		queueID := "qid"
 		payload := []byte(`{"msg":"hello"}`)
-		row, err := gen.NewQuerier(tx).Enqueue(ctx, MessageToParams(EnqueueMessage{
+		row, err := querier.Enqueue(ctx, MessageToParams(EnqueueMessage{
 			Payload: payload,
 			QueueID: queueID,
 		}))
@@ -71,7 +71,9 @@ func TestEnqueueDequeue(t *testing.T) {
 	})
 
 	t.Run("report_done_removes_work", func(t *testing.T) {
+		tx, ctx := dbtest.GetTestDbTx(t)
 		querier := gen.NewQuerier(tx)
+
 		queueID := "qid"
 		payload := []byte(`{"msg":"hello"}`)
 		row, err := querier.Enqueue(ctx, MessageToParams(EnqueueMessage{
@@ -94,7 +96,9 @@ func TestEnqueueDequeue(t *testing.T) {
 	})
 
 	t.Run("heartbeat_sets_last_heartbeat", func(t *testing.T) {
+		tx, ctx := dbtest.GetTestDbTx(t)
 		querier := gen.NewQuerier(tx)
+
 		queueID := "qid"
 		payload := []byte(`{"msg":"hello"}`)
 		row, err := querier.Enqueue(ctx, MessageToParams(EnqueueMessage{
@@ -111,6 +115,36 @@ func TestEnqueueDequeue(t *testing.T) {
 		cmd, err := querier.SendHeartBeat(ctx, rrow.ID, rrow.WorkSignature)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), cmd.RowsAffected())
+	})
+
+	t.Run("report_done_after_timeout_fails", func(t *testing.T) {
+		tx, ctx := dbtest.GetTestDbTx(t)
+		querier := gen.NewQuerier(tx)
+
+		queueID := "qid"
+		payload := []byte(`{"msg":"hello"}`)
+		_, err := querier.Enqueue(ctx, MessageToParams(EnqueueMessage{
+			Payload: payload,
+			QueueID: queueID,
+		}))
+		require.Nil(t, err)
+
+		rrow, err := querier.Dequeue(ctx, queueID)
+		require.Nil(t, err)
+
+		var iv pgtype.Interval
+		iv.Set(time.Millisecond * 0)
+		cmd, err := querier.RequeueFailed(ctx, iv)
+		require.Nil(t, err)
+		assert.Equal(t, int64(1), cmd.RowsAffected())
+
+		rdcmd, err := querier.ReportDone(ctx, rrow.ID, rrow.WorkSignature)
+		require.Nil(t, err)
+		assert.Equal(t, int64(0), rdcmd.RowsAffected())
+
+		hbcmd, err := querier.SendHeartBeat(ctx, rrow.ID, rrow.WorkSignature)
+		require.Nil(t, err)
+		assert.Empty(t, hbcmd.RowsAffected())
 	})
 }
 

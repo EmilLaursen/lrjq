@@ -1,5 +1,5 @@
 get:
-  operationId: dequeue
+  operationId: dequeueMsg
   parameters:
     - $ref: ../components/parameters/queueID.yaml
   responses:
@@ -8,13 +8,13 @@ get:
       headers:
         X-LRJQ-ID:
           schema:
-            $ref: ../schemas/MessageID.yaml
+            $ref: ../components/schemas/MessageID.yaml
         X-LRJQ-QUEUE-ID:
           schema:
-            $ref: ../schemas/QueueID.yaml
+            $ref: ../components/schemas/QueueID.yaml
         X-LRJQ-WORK-SIGNATURE:
           schema:
-            $ref: ../schemas/UUIDv4.yaml
+            $ref: ../components/schemas/UUIDv4.yaml
         X-LRJQ-CREATED-AT:
           schema:
             type: string
@@ -33,12 +33,23 @@ get:
             format: int32
         X-LRJQ-STATUS:
           schema:
-            $ref: ../schemas/JobStatus.yaml
+            $ref: ../components/schemas/JobStatus.yaml
       content:
         application/octet-stream:
           schema:
             type: string
             format: binary
+      links:
+        DequeueHeartbeat:
+          operationId: heartBeat
+          parameters:
+            workID: '$response.header.x-lrjq-work-signature'
+            messageID: '$response.header.x-lrjq-id'
+        DequeueAck:
+          operationId: ackMessage
+          parameters:
+            workID: '$response.header.x-lrjq-work-signature'
+            messageID: '$response.header.x-lrjq-id'
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

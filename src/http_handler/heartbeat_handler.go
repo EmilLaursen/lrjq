@@ -2,14 +2,13 @@ package http_handler
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
 	"github.com/rs/zerolog"
 
 	"github.com/gofrs/uuid"
@@ -59,29 +58,24 @@ func heartbeatHandler(heartbeat heartbeatFunc) http.HandlerFunc {
 
 		id, workSignature, err := parseHeartbeatParams(msgID, workID)
 		if err != nil {
-			logger.Err(err).Send()
 			rw.WriteHeader(http.StatusBadRequest)
+			err := json.NewEncoder(rw).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			if err != nil {
+				logger.Err(err).Send()
+			}
 			return
 		}
 
 		cmd, err := heartbeat(ctx, id, workSignature)
 		if err != nil {
-
-			switch {
-			case errors.Is(err, pgx.ErrNoRows):
-				logger.Err(err).Send()
-				rw.WriteHeader(http.StatusNotFound)
-
-			default:
-				logger.Err(err).Send()
-				rw.WriteHeader(http.StatusInternalServerError)
-			}
-
+			logger.Err(err).Send()
+			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
 		if cmd.RowsAffected() == 0 {
-			logger.Err(err).Send()
 			rw.WriteHeader(http.StatusNotFound)
 			return
 		}

@@ -8,6 +8,7 @@ import (
 	"net/url"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/rs/zerolog"
 )
 
 //go:embed *.yaml components/* paths/*
@@ -17,6 +18,7 @@ func FromFS(ctx context.Context, fsys fs.FS, path string) (*openapi3.T, error) {
 	loader := openapi3.NewLoader()
 	loader.IsExternalRefsAllowed = true
 	loader.ReadFromURIFunc = func(loader *openapi3.Loader, url *url.URL) ([]byte, error) {
+		zerolog.Ctx(ctx).Debug().Str("path", url.Path).Send()
 		return fs.ReadFile(fsys, url.Path)
 	}
 
