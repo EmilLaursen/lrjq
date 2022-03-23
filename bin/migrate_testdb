@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+migrate -path src/adapters/postgres_store/migrations -database "pgx://lrjq:lrjq@localhost:5432/testdb" up

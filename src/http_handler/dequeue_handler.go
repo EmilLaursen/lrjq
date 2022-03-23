@@ -42,9 +42,11 @@ func ToHeaders(m MessageMeta) (map[string]string, error) {
 	return headers, nil
 }
 
-type dequeueFunc func(ctx context.Context, queueID string) (gen.DequeueRow, error)
+type dequeueFunc func(ctx context.Context, queueID string, maxTries int32) (gen.DequeueRow, error)
 
-func dequeueHandler(dequeue dequeueFunc) http.HandlerFunc {
+var _ dequeueFunc = (&gen.DBQuerier{}).Dequeue
+
+func dequeueHandler(dequeue dequeueFunc, maxTries int32) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
@@ -58,7 +60,7 @@ func dequeueHandler(dequeue dequeueFunc) http.HandlerFunc {
 		logger = &l
 		ctx = logger.WithContext(ctx)
 
-		msg, err := dequeue(ctx, queueID)
+		msg, err := dequeue(ctx, queueID, maxTries)
 		if err != nil {
 
 			switch {

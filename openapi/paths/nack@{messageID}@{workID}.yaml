@@ -1,11 +1,11 @@
 get:
-  operationId: ackMessage
+  operationId: requeueMessage
   parameters:
     - $ref: ../components/parameters/WorkID.yaml
     - $ref: ../components/parameters/MessageID.yaml
   responses:
     '200':
-      description: acked
+      description: requeued
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

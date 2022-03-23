@@ -1,12 +1,7 @@
 package http_handler
 
+import "testing"
 
-func TestParseParam(t *testing.T)  {
+func TestParseParam(t *testing.T) {
 
-	var msgID = "123"
-	workID := 
-	
 }
-
-func
-

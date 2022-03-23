@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/EmilLaursen/lrjq/src/adapters/postgres_store/gen"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgtype"
@@ -13,9 +14,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type reportDoneFunc func(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
+type workReportFunc func(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
 
-func reportDoneHandler(reportDone reportDoneFunc) http.HandlerFunc {
+var _ workReportFunc = (&gen.DBQuerier{}).Ack
+var _ workReportFunc = (&gen.DBQuerier{}).Nack
+var _ workReportFunc = (&gen.DBQuerier{}).Requeue
+
+func workReportHandler(workReport workReportFunc) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
@@ -31,7 +36,7 @@ func reportDoneHandler(reportDone reportDoneFunc) http.HandlerFunc {
 		logger = &l
 		ctx = logger.WithContext(ctx)
 
-		id, workSignature, err := parseHeartbeatParams(msgID, workID)
+		id, workSignature, err := parseIDParams(msgID, workID)
 		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
 			err := json.NewEncoder(rw).Encode(map[string]interface{}{
@@ -43,7 +48,7 @@ func reportDoneHandler(reportDone reportDoneFunc) http.HandlerFunc {
 			return
 		}
 
-		cmd, err := reportDone(ctx, id, workSignature)
+		cmd, err := workReport(ctx, id, workSignature)
 		if err != nil {
 			logger.Err(err).Send()
 			switch {

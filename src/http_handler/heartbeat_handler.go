@@ -14,7 +14,7 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-func parseHeartbeatParams(msgID, workID string) (int32, pgtype.UUID, error) {
+func parseIDParams(msgID, workID string) (int32, pgtype.UUID, error) {
 
 	var uid pgtype.UUID
 	var mid int32
@@ -56,7 +56,7 @@ func heartbeatHandler(heartbeat heartbeatFunc) http.HandlerFunc {
 		logger = &l
 		ctx = logger.WithContext(ctx)
 
-		id, workSignature, err := parseHeartbeatParams(msgID, workID)
+		id, workSignature, err := parseIDParams(msgID, workID)
 		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
 			err := json.NewEncoder(rw).Encode(map[string]interface{}{

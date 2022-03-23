@@ -1,11 +1,11 @@
 get:
-  operationId: ackMessage
+  operationId: nackMessage
   parameters:
     - $ref: ../components/parameters/WorkID.yaml
     - $ref: ../components/parameters/MessageID.yaml
   responses:
     '200':
-      description: acked
+      description: nacked
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

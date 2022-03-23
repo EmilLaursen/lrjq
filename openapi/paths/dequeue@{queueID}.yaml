@@ -50,6 +50,16 @@ get:
           parameters:
             workID: '$response.header.x-lrjq-work-signature'
             messageID: '$response.header.x-lrjq-id'
+        DequeueNack:
+          operationId: nackMessage
+          parameters:
+            workID: '$response.header.x-lrjq-work-signature'
+            messageID: '$response.header.x-lrjq-id'
+        DequeueRequeue:
+          operationId: requeueMessage
+          parameters:
+            workID: '$response.header.x-lrjq-work-signature'
+            messageID: '$response.header.x-lrjq-id'
     4XX:
       $ref: ../components/responses/Error.yaml
     5XX:

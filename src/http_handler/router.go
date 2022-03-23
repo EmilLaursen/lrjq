@@ -27,7 +27,7 @@ func DrainAndClose(r *http.Request) {
 	}
 }
 
-func QueueRouter(r *chi.Mux, logger *zerolog.Logger, pool *pgxpool.Pool) *chi.Mux {
+func QueueRouter(r *chi.Mux, logger *zerolog.Logger, pool *pgxpool.Pool, maxTries int32) *chi.Mux {
 	m := NewHandlerLoggingChain(logger)
 	r.Use(m)
 	ctx := context.Background()
@@ -42,9 +42,13 @@ func QueueRouter(r *chi.Mux, logger *zerolog.Logger, pool *pgxpool.Pool) *chi.Mu
 
 	r.Use(oaval)
 	r.Post("/queue/enqueue/{queueID}", enqueueHandler(gen.NewQuerier(pool).Enqueue).ServeHTTP)
-	r.Get("/queue/dequeue/{queueID}", dequeueHandler(gen.NewQuerier(pool).Dequeue).ServeHTTP)
+	r.Get("/queue/dequeue/{queueID}", dequeueHandler(gen.NewQuerier(pool).Dequeue, maxTries).ServeHTTP)
 	r.Post("/queue/heartbeat/{ID}/{workID}", heartbeatHandler(gen.NewQuerier(pool).SendHeartBeat).ServeHTTP)
-	r.Put("/queue/ack/{ID}/{workID}", reportDoneHandler(gen.NewQuerier(pool).ReportDone).ServeHTTP)
+
+	// TODO: change to post, this is not idempotent
+	r.Put("/queue/ack/{ID}/{workID}", workReportHandler(gen.NewQuerier(pool).Ack).ServeHTTP)
+	r.Post("/queue/nack/{ID}/{workID}", workReportHandler(gen.NewQuerier(pool).Nack).ServeHTTP)
+	r.Post("/queue/requeue/{ID}/{workID}", workReportHandler(gen.NewQuerier(pool).Requeue).ServeHTTP)
 
 	return r
 }

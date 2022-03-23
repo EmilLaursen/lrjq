@@ -23,7 +23,9 @@
   - nack after ack (or vice versa) fails
   - concurrency test
 - [x] add DIRENV with path_add to binary folder
-- [ ] fix bug in dequeue - need maxtries guard
+- [ ] maybe delete done_jobs table, or make it configurable. Maybe remove payload?
+- [x] fix bug in dequeue - need maxtries guard
+- [ ] nack, requeue openapi.
 - [ ] tls certificates from env
 - [ ] refactor json response stuff?
 - [ ] BULK OPS

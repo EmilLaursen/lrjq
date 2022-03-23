@@ -23,19 +23,40 @@ type Querier interface {
 	// EnqueueScan scans the result of an executed EnqueueBatch query.
 	EnqueueScan(results pgx.BatchResults) (EnqueueRow, error)
 
-	Dequeue(ctx context.Context, queueID string) (DequeueRow, error)
+	Dequeue(ctx context.Context, queueID string, maxTries int32) (DequeueRow, error)
 	// DequeueBatch enqueues a Dequeue query into batch to be executed
 	// later by the batch.
-	DequeueBatch(batch genericBatch, queueID string)
+	DequeueBatch(batch genericBatch, queueID string, maxTries int32)
 	// DequeueScan scans the result of an executed DequeueBatch query.
 	DequeueScan(results pgx.BatchResults) (DequeueRow, error)
 
-	ReportDone(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
-	// ReportDoneBatch enqueues a ReportDone query into batch to be executed
+	Ack(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
+	// AckBatch enqueues a Ack query into batch to be executed
 	// later by the batch.
-	ReportDoneBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
-	// ReportDoneScan scans the result of an executed ReportDoneBatch query.
-	ReportDoneScan(results pgx.BatchResults) (pgconn.CommandTag, error)
+	AckBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
+	// AckScan scans the result of an executed AckBatch query.
+	AckScan(results pgx.BatchResults) (pgconn.CommandTag, error)
+
+	Nack(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
+	// NackBatch enqueues a Nack query into batch to be executed
+	// later by the batch.
+	NackBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
+	// NackScan scans the result of an executed NackBatch query.
+	NackScan(results pgx.BatchResults) (pgconn.CommandTag, error)
+
+	Requeue(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
+	// RequeueBatch enqueues a Requeue query into batch to be executed
+	// later by the batch.
+	RequeueBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
+	// RequeueScan scans the result of an executed RequeueBatch query.
+	RequeueScan(results pgx.BatchResults) (pgconn.CommandTag, error)
+
+	SendHeartBeat(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
+	// SendHeartBeatBatch enqueues a SendHeartBeat query into batch to be executed
+	// later by the batch.
+	SendHeartBeatBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
+	// SendHeartBeatScan scans the result of an executed SendHeartBeatBatch query.
+	SendHeartBeatScan(results pgx.BatchResults) (pgconn.CommandTag, error)
 
 	RequeueFailed(ctx context.Context, deadline pgtype.Interval) (pgconn.CommandTag, error)
 	// RequeueFailedBatch enqueues a RequeueFailed query into batch to be executed
@@ -50,13 +71,6 @@ type Querier interface {
 	DeleteDeadLettersBatch(batch genericBatch, maxTries int32)
 	// DeleteDeadLettersScan scans the result of an executed DeleteDeadLettersBatch query.
 	DeleteDeadLettersScan(results pgx.BatchResults) (pgconn.CommandTag, error)
-
-	SendHeartBeat(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error)
-	// SendHeartBeatBatch enqueues a SendHeartBeat query into batch to be executed
-	// later by the batch.
-	SendHeartBeatBatch(batch genericBatch, id int32, workSignature pgtype.UUID)
-	// SendHeartBeatScan scans the result of an executed SendHeartBeatBatch query.
-	SendHeartBeatScan(results pgx.BatchResults) (pgconn.CommandTag, error)
 }
 
 type DBQuerier struct {
@@ -140,17 +154,23 @@ func PrepareAllQueries(ctx context.Context, p preparer) error {
 	if _, err := p.Prepare(ctx, dequeueSQL, dequeueSQL); err != nil {
 		return fmt.Errorf("prepare query 'Dequeue': %w", err)
 	}
-	if _, err := p.Prepare(ctx, reportDoneSQL, reportDoneSQL); err != nil {
-		return fmt.Errorf("prepare query 'ReportDone': %w", err)
+	if _, err := p.Prepare(ctx, ackSQL, ackSQL); err != nil {
+		return fmt.Errorf("prepare query 'Ack': %w", err)
+	}
+	if _, err := p.Prepare(ctx, nackSQL, nackSQL); err != nil {
+		return fmt.Errorf("prepare query 'Nack': %w", err)
+	}
+	if _, err := p.Prepare(ctx, requeueSQL, requeueSQL); err != nil {
+		return fmt.Errorf("prepare query 'Requeue': %w", err)
+	}
+	if _, err := p.Prepare(ctx, sendHeartBeatSQL, sendHeartBeatSQL); err != nil {
+		return fmt.Errorf("prepare query 'SendHeartBeat': %w", err)
 	}
 	if _, err := p.Prepare(ctx, requeueFailedSQL, requeueFailedSQL); err != nil {
 		return fmt.Errorf("prepare query 'RequeueFailed': %w", err)
 	}
 	if _, err := p.Prepare(ctx, deleteDeadLettersSQL, deleteDeadLettersSQL); err != nil {
 		return fmt.Errorf("prepare query 'DeleteDeadLetters': %w", err)
-	}
-	if _, err := p.Prepare(ctx, sendHeartBeatSQL, sendHeartBeatSQL); err != nil {
-		return fmt.Errorf("prepare query 'SendHeartBeat': %w", err)
 	}
 	return nil
 }
@@ -256,7 +276,8 @@ const dequeueSQL = `WITH PEEK AS (
      FROM queue.jobs
      WHERE
         status = 'ready' and
-        queue_id = $1
+        queue_id = $1 and
+        tries <= $2
     ORDER BY priority, created_at
     FOR UPDATE SKIP LOCKED
     LIMIT 1
@@ -289,9 +310,9 @@ type DequeueRow struct {
 }
 
 // Dequeue implements Querier.Dequeue.
-func (q *DBQuerier) Dequeue(ctx context.Context, queueID string) (DequeueRow, error) {
+func (q *DBQuerier) Dequeue(ctx context.Context, queueID string, maxTries int32) (DequeueRow, error) {
 	ctx = context.WithValue(ctx, "pggen_query_name", "Dequeue")
-	row := q.conn.QueryRow(ctx, dequeueSQL, queueID)
+	row := q.conn.QueryRow(ctx, dequeueSQL, queueID, maxTries)
 	var item DequeueRow
 	if err := row.Scan(&item.ID, &item.QueueID, &item.Payload, &item.WorkSignature, &item.CreatedAt, &item.LastHeartbeat, &item.StartedAt, &item.DoneAt, &item.Tries, &item.Priority, &item.Status, &item.PeekID); err != nil {
 		return item, fmt.Errorf("query Dequeue: %w", err)
@@ -300,8 +321,8 @@ func (q *DBQuerier) Dequeue(ctx context.Context, queueID string) (DequeueRow, er
 }
 
 // DequeueBatch implements Querier.DequeueBatch.
-func (q *DBQuerier) DequeueBatch(batch genericBatch, queueID string) {
-	batch.Queue(dequeueSQL, queueID)
+func (q *DBQuerier) DequeueBatch(batch genericBatch, queueID string, maxTries int32) {
+	batch.Queue(dequeueSQL, queueID, maxTries)
 }
 
 // DequeueScan implements Querier.DequeueScan.
@@ -314,7 +335,7 @@ func (q *DBQuerier) DequeueScan(results pgx.BatchResults) (DequeueRow, error) {
 	return item, nil
 }
 
-const reportDoneSQL = `WITH moved_row AS (
+const ackSQL = `WITH moved_row AS (
      DELETE FROM queue.jobs
      WHERE
         id = $1 AND
@@ -334,26 +355,134 @@ SELECT
    priority
 FROM moved_row;`
 
-// ReportDone implements Querier.ReportDone.
-func (q *DBQuerier) ReportDone(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
-	ctx = context.WithValue(ctx, "pggen_query_name", "ReportDone")
-	cmdTag, err := q.conn.Exec(ctx, reportDoneSQL, id, workSignature)
+// Ack implements Querier.Ack.
+func (q *DBQuerier) Ack(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
+	ctx = context.WithValue(ctx, "pggen_query_name", "Ack")
+	cmdTag, err := q.conn.Exec(ctx, ackSQL, id, workSignature)
 	if err != nil {
-		return cmdTag, fmt.Errorf("exec query ReportDone: %w", err)
+		return cmdTag, fmt.Errorf("exec query Ack: %w", err)
 	}
 	return cmdTag, err
 }
 
-// ReportDoneBatch implements Querier.ReportDoneBatch.
-func (q *DBQuerier) ReportDoneBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
-	batch.Queue(reportDoneSQL, id, workSignature)
+// AckBatch implements Querier.AckBatch.
+func (q *DBQuerier) AckBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
+	batch.Queue(ackSQL, id, workSignature)
 }
 
-// ReportDoneScan implements Querier.ReportDoneScan.
-func (q *DBQuerier) ReportDoneScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
+// AckScan implements Querier.AckScan.
+func (q *DBQuerier) AckScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
 	cmdTag, err := results.Exec()
 	if err != nil {
-		return cmdTag, fmt.Errorf("exec ReportDoneBatch: %w", err)
+		return cmdTag, fmt.Errorf("exec AckBatch: %w", err)
+	}
+	return cmdTag, err
+}
+
+const nackSQL = `WITH dead_job AS (
+    DELETE FROM queue.jobs
+    WHERE
+        id = $1 AND
+        work_signature = $2 AND
+        status = 'started'
+    RETURNING *
+)
+INSERT INTO queue.dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
+SELECT
+  id,
+  queue_id,
+  payload,
+  created_at,
+  last_heartbeat,
+  done_at,
+  tries,
+  priority
+FROM DEAD_JOB;`
+
+// Nack implements Querier.Nack.
+func (q *DBQuerier) Nack(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
+	ctx = context.WithValue(ctx, "pggen_query_name", "Nack")
+	cmdTag, err := q.conn.Exec(ctx, nackSQL, id, workSignature)
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec query Nack: %w", err)
+	}
+	return cmdTag, err
+}
+
+// NackBatch implements Querier.NackBatch.
+func (q *DBQuerier) NackBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
+	batch.Queue(nackSQL, id, workSignature)
+}
+
+// NackScan implements Querier.NackScan.
+func (q *DBQuerier) NackScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
+	cmdTag, err := results.Exec()
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec NackBatch: %w", err)
+	}
+	return cmdTag, err
+}
+
+const requeueSQL = `UPDATE queue.jobs
+SET
+  status = 'ready',
+  started_at = null,
+  last_heartbeat = null,
+  work_signature = null
+WHERE
+    id = $1 AND
+    work_signature = $2 AND
+    status = 'started';`
+
+// Requeue implements Querier.Requeue.
+func (q *DBQuerier) Requeue(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
+	ctx = context.WithValue(ctx, "pggen_query_name", "Requeue")
+	cmdTag, err := q.conn.Exec(ctx, requeueSQL, id, workSignature)
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec query Requeue: %w", err)
+	}
+	return cmdTag, err
+}
+
+// RequeueBatch implements Querier.RequeueBatch.
+func (q *DBQuerier) RequeueBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
+	batch.Queue(requeueSQL, id, workSignature)
+}
+
+// RequeueScan implements Querier.RequeueScan.
+func (q *DBQuerier) RequeueScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
+	cmdTag, err := results.Exec()
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec RequeueBatch: %w", err)
+	}
+	return cmdTag, err
+}
+
+const sendHeartBeatSQL = `UPDATE queue.jobs SET
+  last_heartbeat = now()
+WHERE
+  id = $1 and work_signature = $2 and status = 'started';`
+
+// SendHeartBeat implements Querier.SendHeartBeat.
+func (q *DBQuerier) SendHeartBeat(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
+	ctx = context.WithValue(ctx, "pggen_query_name", "SendHeartBeat")
+	cmdTag, err := q.conn.Exec(ctx, sendHeartBeatSQL, id, workSignature)
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec query SendHeartBeat: %w", err)
+	}
+	return cmdTag, err
+}
+
+// SendHeartBeatBatch implements Querier.SendHeartBeatBatch.
+func (q *DBQuerier) SendHeartBeatBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
+	batch.Queue(sendHeartBeatSQL, id, workSignature)
+}
+
+// SendHeartBeatScan implements Querier.SendHeartBeatScan.
+func (q *DBQuerier) SendHeartBeatScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
+	cmdTag, err := results.Exec()
+	if err != nil {
+		return cmdTag, fmt.Errorf("exec SendHeartBeatBatch: %w", err)
 	}
 	return cmdTag, err
 }
@@ -393,7 +522,7 @@ func (q *DBQuerier) RequeueFailedScan(results pgx.BatchResults) (pgconn.CommandT
 
 const deleteDeadLettersSQL = `WITH dead_jobs AS (
      DELETE FROM queue.jobs
-     WHERE tries >= $1
+     WHERE tries > $1 and status = 'ready'
      RETURNING *
 )
 INSERT INTO queue.dead_letters (id, queue_id, payload, created_at, last_heartbeat, done_at, tries, priority)
@@ -428,35 +557,6 @@ func (q *DBQuerier) DeleteDeadLettersScan(results pgx.BatchResults) (pgconn.Comm
 	cmdTag, err := results.Exec()
 	if err != nil {
 		return cmdTag, fmt.Errorf("exec DeleteDeadLettersBatch: %w", err)
-	}
-	return cmdTag, err
-}
-
-const sendHeartBeatSQL = `UPDATE queue.jobs SET
-  last_heartbeat = now()
-WHERE
-  id = $1 and work_signature = $2 and status = 'started';`
-
-// SendHeartBeat implements Querier.SendHeartBeat.
-func (q *DBQuerier) SendHeartBeat(ctx context.Context, id int32, workSignature pgtype.UUID) (pgconn.CommandTag, error) {
-	ctx = context.WithValue(ctx, "pggen_query_name", "SendHeartBeat")
-	cmdTag, err := q.conn.Exec(ctx, sendHeartBeatSQL, id, workSignature)
-	if err != nil {
-		return cmdTag, fmt.Errorf("exec query SendHeartBeat: %w", err)
-	}
-	return cmdTag, err
-}
-
-// SendHeartBeatBatch implements Querier.SendHeartBeatBatch.
-func (q *DBQuerier) SendHeartBeatBatch(batch genericBatch, id int32, workSignature pgtype.UUID) {
-	batch.Queue(sendHeartBeatSQL, id, workSignature)
-}
-
-// SendHeartBeatScan implements Querier.SendHeartBeatScan.
-func (q *DBQuerier) SendHeartBeatScan(results pgx.BatchResults) (pgconn.CommandTag, error) {
-	cmdTag, err := results.Exec()
-	if err != nil {
-		return cmdTag, fmt.Errorf("exec SendHeartBeatBatch: %w", err)
 	}
 	return cmdTag, err
 }

@@ -36,6 +36,7 @@ func MessageToParams(msg EnqueueMessage) gen.EnqueueParams {
 }
 
 func TestEnqueueDequeue(t *testing.T) {
+	maxTries := int32(3)
 
 	t.Run("gives_back_payload", func(t *testing.T) {
 		tx, ctx := dbtest.GetTestDbTx(t)
@@ -47,7 +48,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		}))
 		require.Nil(t, err)
 
-		rrow, err := gen.NewQuerier(tx).Dequeue(ctx, queueID)
+		rrow, err := gen.NewQuerier(tx).Dequeue(ctx, queueID, maxTries)
 		require.Nil(t, err)
 		assert.JSONEq(t, string(row.Payload), string(rrow.Payload))
 	})
@@ -65,12 +66,12 @@ func TestEnqueueDequeue(t *testing.T) {
 		require.Nil(t, err)
 		assert.Zero(t, row.WorkSignature.Bytes)
 
-		rrow, err := gen.NewQuerier(tx).Dequeue(ctx, queueID)
+		rrow, err := gen.NewQuerier(tx).Dequeue(ctx, queueID, maxTries)
 		require.Nil(t, err)
 		assert.NotZero(t, rrow.WorkSignature.Bytes)
 	})
 
-	t.Run("report_done_removes_work", func(t *testing.T) {
+	t.Run("ack_removes_work", func(t *testing.T) {
 		tx, ctx := dbtest.GetTestDbTx(t)
 		querier := gen.NewQuerier(tx)
 
@@ -83,15 +84,15 @@ func TestEnqueueDequeue(t *testing.T) {
 		require.Nil(t, err)
 		assert.Zero(t, row.WorkSignature.Bytes)
 
-		rrow, err := querier.Dequeue(ctx, queueID)
+		rrow, err := querier.Dequeue(ctx, queueID, maxTries)
 		require.Nil(t, err)
 		assert.NotZero(t, rrow.WorkSignature.Bytes)
 
-		cmd, err := querier.ReportDone(ctx, rrow.ID, rrow.WorkSignature)
+		cmd, err := querier.Ack(ctx, rrow.ID, rrow.WorkSignature)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(1), cmd.RowsAffected())
 
-		_, err = querier.Dequeue(ctx, queueID)
+		_, err = querier.Dequeue(ctx, queueID, maxTries)
 		assert.ErrorIs(t, err, pgx.ErrNoRows)
 	})
 
@@ -108,7 +109,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		require.Nil(t, err)
 		assert.Zero(t, row.WorkSignature.Bytes)
 
-		rrow, err := querier.Dequeue(ctx, queueID)
+		rrow, err := querier.Dequeue(ctx, queueID, maxTries)
 		require.Nil(t, err)
 		assert.NotZero(t, rrow.WorkSignature.Bytes)
 
@@ -117,7 +118,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		assert.Equal(t, int64(1), cmd.RowsAffected())
 	})
 
-	t.Run("report_done_after_timeout_fails", func(t *testing.T) {
+	t.Run("ack_after_timeout_fails", func(t *testing.T) {
 		tx, ctx := dbtest.GetTestDbTx(t)
 		querier := gen.NewQuerier(tx)
 
@@ -129,7 +130,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		}))
 		require.Nil(t, err)
 
-		rrow, err := querier.Dequeue(ctx, queueID)
+		rrow, err := querier.Dequeue(ctx, queueID, maxTries)
 		require.Nil(t, err)
 
 		var iv pgtype.Interval
@@ -138,7 +139,7 @@ func TestEnqueueDequeue(t *testing.T) {
 		require.Nil(t, err)
 		assert.Equal(t, int64(1), cmd.RowsAffected())
 
-		rdcmd, err := querier.ReportDone(ctx, rrow.ID, rrow.WorkSignature)
+		rdcmd, err := querier.Ack(ctx, rrow.ID, rrow.WorkSignature)
 		require.Nil(t, err)
 		assert.Equal(t, int64(0), rdcmd.RowsAffected())
 
@@ -151,8 +152,10 @@ func TestEnqueueDequeue(t *testing.T) {
 func TestDequeue(t *testing.T) {
 	tx, ctx := dbtest.GetTestDbTx(t)
 
+	maxTries := int32(3)
+
 	t.Run("non_existing_queue_gives_ErrNoRows", func(t *testing.T) {
-		row, err := gen.NewQuerier(tx).Dequeue(ctx, "notexists")
+		row, err := gen.NewQuerier(tx).Dequeue(ctx, "notexists", maxTries)
 		assert.ErrorIs(t, err, pgx.ErrNoRows)
 		assert.Empty(t, row)
 	})

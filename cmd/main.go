@@ -29,7 +29,7 @@ type Config struct {
 
 	HeartbeatDeadline       time.Duration `envconfig:"HEARTBEAT_DEADLINE" default:"20m"`
 	MsgMaxTries             int32         `envconfig:"MAX_TRIES" default:"3"`
-	DeadletterSweepInterval time.Duration `envconfig:"DEADLETTER_SWEEP_INTERVAL" default:"10m"`
+	DeadletterSweepInterval time.Duration `envconfig:"DEADLETTER_SWEEP_INTERVAL" default:"3m"`
 }
 
 func main() {
@@ -38,8 +38,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx := context.Background()
-	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx, cancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT,
+	)
 	defer cancel()
 
 	level, err := zerolog.ParseLevel(strings.ToLower(cfg.LogLevel))
@@ -97,7 +102,7 @@ func main() {
 	base := chi.NewRouter()
 	base.Mount("/static", http.StripPrefix("/static", openapi.OpenAPIHandler()))
 	r := chi.NewRouter()
-	base.Mount("/", http_handler.QueueRouter(r, &logger, pool))
+	base.Mount("/", http_handler.QueueRouter(r, &logger, pool, cfg.MsgMaxTries))
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf("0.0.0.0:%s", cfg.Port),

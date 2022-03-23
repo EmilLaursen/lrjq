@@ -16,3 +16,7 @@ paths:
     $ref: paths/heartbeat@{messageID}@{workID}.yaml
   /queue/ack/{messageID}/{workID}:
     $ref: paths/ack@{messageID}@{workID}.yaml
+  /queue/nack/{messageID}/{workID}:
+    $ref: paths/nack@{messageID}@{workID}.yaml
+  /queue/requeue/{messageID}/{workID}:
+    $ref: paths/requeue@{messageID}@{workID}.yaml
